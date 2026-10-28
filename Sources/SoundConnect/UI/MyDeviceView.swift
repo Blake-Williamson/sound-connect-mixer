@@ -93,41 +93,25 @@ struct NoiseControlCard: View {
         let intent = controller.noiseIntent
         Card("Ambient Sound Control", subtitle: subtitle(current)) {
             if let cap {
-                ZStack(alignment: .top) {
-                    ModeRail(count: cap.modes.count).frame(height: 58)
-                    HStack(spacing: 0) {
-                        ForEach(cap.modes) { mode in
-                            ModeButton(title: mode.title, symbol: mode.symbol,
-                                       selected: current?.mode == mode,
-                                       pending: intent?.mode == mode && current?.mode != mode,
-                                       enabled: controller.canWrite) {
-                                select(mode)
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                    }
-                }
-                .padding(.horizontal, -4)
-
-                if let current, current.mode == .ambient, cap.ambientRange.count > 1 {
-                    let shown = intent?.mode == .ambient ? (intent ?? current) : current
+                if cap.modes.contains(.noiseCancelling), cap.modes.contains(.ambient), cap.ambientRange.count > 1 {
+                    // Unified Noise Canceling → Ambient slider (capability-gated). Other modes (Off,
+                    // Wind on models that have it) stay available as small buttons beside it.
+                    let shown = controller.noiseBase ?? NoiseControl(mode: .noiseCancelling, ambientLevel: rememberedLevel, focusOnVoice: false)
                     VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Ambient level").font(.label).foregroundStyle(Theme.secondary)
-                            Spacer()
-                            Text("\(shown.ambientLevel)")
-                                .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                                .foregroundStyle(Theme.text)
-                                .contentTransition(reduceMotion ? .identity : .numericText())
+                        AmbientSlider(cap: cap, shown: shown, rememberedLevel: $rememberedLevel)
+                        let others = cap.modes.filter { $0 != .noiseCancelling && $0 != .ambient }
+                        if !others.isEmpty {
+                            HStack(spacing: 8) {
+                                ForEach(others) { mode in
+                                    ModeButton(title: mode.title, symbol: mode.symbol,
+                                               selected: current?.mode == mode,
+                                               pending: intent?.mode == mode && current?.mode != mode,
+                                               enabled: controller.canWrite) { select(mode) }
+                                        .frame(maxWidth: .infinity)
+                                }
+                            }
                         }
-                        LevelSlider(value: shown.ambientLevel, range: cap.ambientRange,
-                                    enabled: controller.canWrite, accessibilityName: "Ambient sound level",
-                                    onDrag: { controller.dragAmbientLevel($0) },
-                                    onCommit: { level in
-                                        if !controller.isReplay { rememberedLevel = level }
-                                        controller.requestNoise { $0.ambientLevel = level }
-                                    })
-                        if cap.supportsVoiceFocus {
+                        if shown.mode == .ambient, cap.supportsVoiceFocus {
                             Divider().overlay(Theme.hairline)
                             Toggle(isOn: Binding(
                                 get: { shown.focusOnVoice },
@@ -142,7 +126,58 @@ struct NoiseControlCard: View {
                     }
                     .padding(14)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.cardRaised.opacity(0.6)))
-                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
+                } else {
+                    ZStack(alignment: .top) {
+                        ModeRail(count: cap.modes.count).frame(height: 58)
+                        HStack(spacing: 0) {
+                            ForEach(cap.modes) { mode in
+                                ModeButton(title: mode.title, symbol: mode.symbol,
+                                           selected: current?.mode == mode,
+                                           pending: intent?.mode == mode && current?.mode != mode,
+                                           enabled: controller.canWrite) {
+                                    select(mode)
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, -4)
+
+                    if let current, current.mode == .ambient, cap.ambientRange.count > 1 {
+                        let shown = intent?.mode == .ambient ? (intent ?? current) : current
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text("Ambient level").font(.label).foregroundStyle(Theme.secondary)
+                                Spacer()
+                                Text("\(shown.ambientLevel)")
+                                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                                    .foregroundStyle(Theme.text)
+                                    .contentTransition(reduceMotion ? .identity : .numericText())
+                            }
+                            LevelSlider(value: shown.ambientLevel, range: cap.ambientRange,
+                                        enabled: controller.canWrite, accessibilityName: "Ambient sound level",
+                                        onDrag: { controller.dragAmbientLevel($0) },
+                                        onCommit: { level in
+                                            if !controller.isReplay { rememberedLevel = level }
+                                            controller.requestNoise { $0.ambientLevel = level }
+                                        })
+                            if cap.supportsVoiceFocus {
+                                Divider().overlay(Theme.hairline)
+                                Toggle(isOn: Binding(
+                                    get: { shown.focusOnVoice },
+                                    set: { on in controller.requestNoise { $0.focusOnVoice = on } }
+                                )) {
+                                    Text("Focus on Voice").font(.system(size: 13.5, weight: .medium)).foregroundStyle(Theme.text)
+                                }
+                                .toggleStyle(AccentToggleStyle())
+                                .disabled(!controller.canWrite)
+                                .accessibilityLabel("Focus on Voice")
+                            }
+                        }
+                        .padding(14)
+                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.cardRaised.opacity(0.6)))
+                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
+                    }
                 }
             }
         }
