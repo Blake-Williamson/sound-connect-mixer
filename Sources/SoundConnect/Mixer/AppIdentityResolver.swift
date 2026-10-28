@@ -41,7 +41,8 @@ struct AppIdentityResolver: AppIdentityResolving {
 
     /// Default friendly labels for shared system daemons that produce audio.
     static let defaultDaemonLabels: [String: String] = [
-        "avconferenced": "Video call",
+        "avconferenced": "Video call",       // Zoom / FaceTime / Teams call audio
+        "systemsoundserverd": "System sounds", // macOS UI sounds, alerts, Siri, etc.
     ]
 
     /// Wires the real system primitives.
